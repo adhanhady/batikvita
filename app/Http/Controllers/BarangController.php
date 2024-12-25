@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use DB;
 use File;
 use DataTables;
+use Storage;
 
 class BarangController extends Controller
 {
@@ -30,10 +31,10 @@ class BarangController extends Controller
         // dd($request);
         $request->validate ([
             'nama_barang'    => 'required',
-            'stok'           => 'required',
-            'harga_kodi'     => 'required',
-            'harga_satuan'   => 'required',
-            'foto'           => 'nullable|max:1000|file|image',
+            'stok'           => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'harga_kodi'     => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'harga_satuan'   => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'foto'           => 'nullable|file|image|mimes:jpeg,jpg,png|max:1024',
         ]);
 
         $foto = null;
@@ -56,7 +57,7 @@ class BarangController extends Controller
 
         ]);
 
-        return redirect(route('input-barang'))->with('pesan','Data Berhasil ditambahkan');
+        return redirect(route('barang'))->with('pesan','Data Berhasil ditambahkan');
 
     }
 
@@ -95,10 +96,10 @@ class BarangController extends Controller
         $barang = Barang::find($id);
         $request->validate ([
             'nama_barang'    => 'required',
-            'stok'           => 'required',
-            'harga_kodi'     => 'required',
-            'harga_satuan'   => 'required',
-            'foto'           => 'nullable|max:1000|file|image',
+            'stok'           => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'harga_kodi'     => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'harga_satuan'   => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'foto'           => 'nullable|file|image|mimes:jpeg,jpg,png|max:1024',
         ]);
 
         if (isset($request->foto)) {
@@ -124,7 +125,7 @@ class BarangController extends Controller
                 'foto'              => (isset($foto) ? $foto : $barang->foto)
             ]);
 
-        return redirect(route('barang.edit',$id))->with('pesan','Data Berhasil diupdate');
+        return redirect(route('barang'))->with('pesan','Data Berhasil diupdate');
 
     }
 
@@ -140,5 +141,25 @@ class BarangController extends Controller
         DB::table('barangs')->where('id',$id)->delete();
 
         return redirect(route('barang'))->with('pesan','Data Berhasil dihapus!');
+    }
+
+    public function massDelete(Request $request)
+    {
+        $ids = $request->ids;
+        
+        // Get barang data to delete images
+        $barangs = DB::table('barangs')->whereIn('id', $ids)->get();
+        
+        // Delete images
+        foreach($barangs as $barang) {
+            if($barang->foto) {
+                File::delete(public_path($barang->foto));
+            }
+        }
+        
+        // Delete records
+        DB::table('barangs')->whereIn('id', $ids)->delete();
+        
+        return response()->json(['success' => true]);
     }
 }

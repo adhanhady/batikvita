@@ -3,14 +3,27 @@
 <div class="section-header">
     <h1>Data Barang</h1>
 </div>
+
+@if (session()->has('pesan'))
+        <div class="alert alert-success alert-dismissible show fade">
+        <div class="alert-body">
+            <button class="close" data-dismiss="alert">
+                <span>×</span>
+            </button>
+            {{ session()->get('pesan') }}
+        </div>
+        </div>
+@endif
+
 <div class="row">
     <div class="col-12">
       <div class="card">
           <div class="card-header">
-            <h4>Data Barang </h4>
-
-              <a class="btn btn-primary" href="{{route('input-barang')}}">Input Data</a>
-
+            <h4>Data Barang</h4>
+            <div class="card-header-action">
+              <a class="btn btn-primary" href="{{route('input-barang')}}">Input Data</a> &nbsp;
+              <button class="btn btn-danger" id="mass-delete" style="display: none">Delete Selected <i class="fas fa-trash"></i></button>
+            </div>
           </div>
         <div class="card-body">
         <div class="table-responsive">
@@ -18,13 +31,17 @@
             <thead>
                 <tr>
                 <th class="text-center">
-                    No
+                    <div class="custom-checkbox custom-control">
+                        <input type="checkbox" class="custom-control-input" id="checkbox-all">
+                        <label for="checkbox-all" class="custom-control-label">&nbsp;</label>
+                    </div>
                 </th>
+                <th class="text-center">No</th>
                 <th class="text-center">Nama Barang</th>
                 <th class="text-center">Stok</th>
-                <th class="text-center">Harga kodi</th>
-                <th class="text-center">Harga satuan</th>
-                <th class="text-center">foto</th>
+                <th class="text-center">Harga Kodi</th>
+                <th class="text-center">Harga Satuan</th>
+                <th class="text-center">Foto</th>
                 <th class="text-center">action</th>
                 </tr>
             </thead>
@@ -44,12 +61,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.nicescroll/3.7.6/jquery.nicescroll.min.js"></script>
 <script type="text/javascript">
   $(function () {
-
     var table = $('.data-table').DataTable({
         processing: true,
         serverSide: true,
         ajax: "{{ route('show') }}",
         columns: [
+            {
+                data: 'checkbox',
+                name: 'checkbox',
+                orderable: false,
+                searchable: false,
+                render: function (data, type, row) {
+                    return `<div class="custom-checkbox custom-control">
+                        <input type="checkbox" class="custom-control-input row-checkbox" id="checkbox-${row.id}" value="${row.id}">
+                        <label for="checkbox-${row.id}" class="custom-control-label">&nbsp;</label>
+                    </div>`;
+                }
+            },
             {
                 data: 'DT_RowIndex',
                 name: 'DT_RowIndex'
@@ -68,18 +96,17 @@
             },
             {
                 data: 'harga_satuan',
-                name: 'harga_atuan'
+                name: 'harga_satuan'
             },
             {
                 data: 'foto',
                 name: 'foto',
-                render: function(data)
-                {
+                render: function(data, type, row) {
                     if (data) {
-                      return '<img src="' + data + '" alt="' + data + '"width="100px"/>';
+                        return '<img src="' + data + '" alt="Foto Barang" width="100">';
                     }
                     return 'Foto Kosong';
-                },
+                }
             },
             {
                 data: 'action',
@@ -90,10 +117,75 @@
         ]
     });
 
+    // Toggle all checkboxes
+    $('#checkbox-all').change(function() {
+        $('.row-checkbox').prop('checked', $(this).prop('checked'));
+        updateMassDeleteButton();
+    });
+
+    // Handle individual checkbox changes
+    $(document).on('change', '.row-checkbox', function() {
+        updateMassDeleteButton();
+        // Update header checkbox
+        var allChecked = $('.row-checkbox:checked').length === $('.row-checkbox').length;
+        $('#checkbox-all').prop('checked', allChecked);
+    });
+
+    function updateMassDeleteButton() {
+        var checkedCount = $('.row-checkbox:checked').length;
+        $('#mass-delete').toggle(checkedCount > 0);
+    }
+
+    // Handle mass delete
+    $('#mass-delete').click(function() {
+        var selectedIds = [];
+        $('.row-checkbox:checked').each(function() {
+            selectedIds.push($(this).val());
+        });
+
+        if (selectedIds.length > 0) {
+            Swal.fire({
+                title: 'Apakah Kamu Yakin?',
+                text: "Hapus " + selectedIds.length + " data yang dipilih!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.value) {
+                    $.ajax({
+                        url: "{{ route('barang.mass-delete') }}",
+                        type: 'POST',
+                        data: {
+                            ids: selectedIds,
+                            _token: '{{ csrf_token() }}'
+                        },
+                        success: function(response) {
+                            Swal.fire(
+                                'Terhapus!',
+                                'Data berhasil dihapus.',
+                                'success'
+                            );
+                            table.ajax.reload();
+                            $('#checkbox-all').prop('checked', false);
+                            updateMassDeleteButton();
+                        },
+                        error: function(error) {
+                            Swal.fire(
+                                'Error!',
+                                'Terjadi kesalahan saat menghapus data.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+    });
   });
 </script>
-
-
 
 <script>
   $('body').on('click','.delete-confirm',function (event) {
@@ -107,26 +199,6 @@
       confirmButtonColor: '#3085d6',
       cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, Hapus'
-    }).then((result) => {
-      if (result.value) {
-        window.location.href = url;
-      }
-    })
-  });
-</script>
-
-<script>
-  $('body').on('click','.edit-confirm',function (event) {
-    event.preventDefault();
-    const url = $(this).attr('href');
-    Swal.fire({
-      title: 'Apakah Kamu Yakin ? ',
-      text: "Edit Data ini!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Ya, Edit'
     }).then((result) => {
       if (result.value) {
         window.location.href = url;

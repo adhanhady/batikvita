@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Imports\LaporansImport;
 use App\Laporan;
+use App\Barang;
 use Illuminate\Http\Request;
 use DB;
 use File;
@@ -22,7 +23,8 @@ class LaporanController extends Controller
 
     public function create()
     {
-        return view('admin.laporan.input-laporan');
+        $barangs = Barang::all();
+        return view('admin.laporan.input-laporan', compact('barangs'));
     }
 
 
@@ -32,11 +34,21 @@ class LaporanController extends Controller
         // dd($request);
         $request->validate ([
             'nama_barang'   => 'required',
-            'jumlah'        => 'required',
+            'jumlah'        => 'required|integer|min:1|regex:/^[0-9]+$/',
             'harga'         => 'required',
             'penghasilan'   => 'required',
+            'id_barang'     => 'required',
         ]);
 
+        // Check if stock is sufficient
+        $barang = Barang::find($request->id_barang);
+        if (!$barang || $barang->stok < $request->jumlah) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['jumlah' => 'Stok tidak cukup! Stok tersedia: ' . ($barang ? $barang->stok : 0)]);
+        }
+
+        DB::table('barangs')->where('id', $request->id_barang)->decrement('stok', $request->jumlah);
 
         DB::table('laporans')
         ->insert([
@@ -46,7 +58,7 @@ class LaporanController extends Controller
             'penghasilan'       => $request->penghasilan,
         ]);
 
-        return redirect(route('input-laporan'))->with('pesan','Data Berhasil ditambahkan');
+        return redirect(route('laporan'))->with('pesan','Data Berhasil ditambahkan');
 
     }
 
@@ -73,27 +85,51 @@ class LaporanController extends Controller
 
     }
 
-    public function edit($id) {
-        $laporan = laporan::find($id);
-        return view('admin.laporan.edit-laporan',['laporan'=>$laporan]);
+    public function edit($id)
+    {
+        $laporan = DB::table('laporans')->where('id', $id)->first();
+        $barangs = DB::table('barangs')->get();
+        return view('admin.laporan.edit-laporan', [
+            'laporan' => $laporan,
+            'barangs' => $barangs
+        ]);
     }
 
 
     public function update(Request $request, $id)
     {
+        $laporan = DB::table('laporans')->where('id', $id)->first();
+        $oldJumlah = $laporan->jumlah;
 
-
-        $laporan = Laporan::find($id);
         $request->validate ([
-            'nama_barang'       => 'required',
-            'jumlah'            => 'required',
-            'harga'             => 'required',
-            'penghasilan'       => 'required',
+            'nama_barang'    => 'required',
+            'jumlah'         => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'harga'          => 'required|integer|min:1|regex:/^[0-9]+$/',
+            'penghasilan'    => 'required|integer|min:1|regex:/^[0-9]+$/',
         ]);
 
+        // Calculate stock difference
+        $jumlahDiff = $request->jumlah - $oldJumlah;
+        
+        // Get barang and check stock
+        $barang = DB::table('barangs')->where('nama_barang', $request->nama_barang)->first();
+        if ($barang->stok < $jumlahDiff) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stok tidak mencukupi! Stok tersedia: ' . ($barang->stok + $oldJumlah)
+            ]);
+        }
 
+        // Update barang stock
+        DB::table('barangs')
+            ->where('nama_barang', $request->nama_barang)
+            ->update([
+                'stok' => $barang->stok - $jumlahDiff
+            ]);
+
+        // Update laporan
         DB::table('laporans')
-            ->where('id', $id)
+            ->where('id',$id)
             ->update([
                 'nama_barang'       => $request->nama_barang,
                 'jumlah'            => $request->jumlah,
@@ -101,8 +137,10 @@ class LaporanController extends Controller
                 'penghasilan'       => $request->penghasilan,
             ]);
 
-        return redirect(route('laporan.edit',$id))->with('pesan','Data Berhasil diupdate');
-
+        return response()->json([
+            'success' => true,
+            'message' => 'Data Berhasil diupdate'
+        ]);
     }
 
     public function destroy($id)
@@ -114,6 +152,13 @@ class LaporanController extends Controller
         return redirect(route('laporan'))->with('pesan','Data Berhasil dihapus!');
     }
 
+    public function massDelete(Request $request)
+    {
+        $ids = $request->ids;
+        DB::table('laporans')->whereIn('id', $ids)->delete();
+        
+        return response()->json(['success' => true]);
+    }
 
     public function export(Request $request)
 	{

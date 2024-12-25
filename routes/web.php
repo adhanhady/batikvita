@@ -31,6 +31,7 @@ Route::post('/barang/tambah','BarangController@store')->name('store');
 Route::get('/barang/edit/{id}','BarangController@edit')->name('barang.edit');
 Route::put('/barang/edit/{id}','BarangController@update')->name('barang.update');
 Route::get('/barang/delete/{id}','BarangController@destroy')->name('barang.hapus');
+Route::post('/barang/mass-delete', 'BarangController@massDelete')->name('barang.mass-delete');
 
 
 // laporan
@@ -41,6 +42,7 @@ Route::post('/laporan/tambah','LaporanController@store')->name('store-laporan');
 Route::get('/laporan/edit/{id}','LaporanController@edit')->name('laporan.edit');
 Route::put('/laporan/edit/{id}','LaporanController@update')->name('laporan.update');
 Route::get('/laporan/delete/{id}','LaporanController@destroy')->name('laporan.hapus');
+Route::post('/laporan/mass-delete', 'LaporanController@massDelete')->name('laporan.mass-delete');
 
 // export laporan
 Route::get('export', 'LaporanController@export')->name('export');
